@@ -1,0 +1,61 @@
+# Track progress toward Home Assistant Core Bronze (and above).
+# Reference: https://developers.home-assistant.io/docs/core/integration-quality-scale/
+# Status: done | todo | exempt
+
+rules:
+  # --- Bronze ---
+  action-setup:
+    status: todo
+    comment: "Move lanbon.set_channel_name registration to async_setup style when porting to core."
+  appropriate-polling:
+    status: done
+    comment: "WS push primary; 30s HTTP poll fallback."
+  brands:
+    status: todo
+    comment: "Submit logo/icon to home-assistant/brands when opening Core PR."
+  category:
+    status: done
+    comment: "Hub / local panel control."
+  config-flow:
+    status: done
+  config-flow-test-coverage:
+    status: todo
+  dependency-transparency:
+    status: done
+    comment: "No PyPI deps; aiohttp via HA."
+  docs-description:
+    status: todo
+    comment: "Need home-assistant.io integration page for Core."
+  docs-installation-instructions:
+    status: done
+    comment: "README covers HACS + manual."
+  docs-removal-instructions:
+    status: todo
+  entity-event-setup:
+    status: done
+  entity-unique-id:
+    status: done
+  has-entity-name:
+    status: done
+  runtime-data:
+    status: todo
+    comment: "Use ConfigEntry.runtime_data when targeting newer HA core style."
+  test-before-configure:
+    status: done
+    comment: "config_flow validates via GET /api/v1/info."
+  test-before-setup:
+    status: done
+    comment: "async_config_entry_first_refresh on setup."
+  unique-config-entry:
+    status: done
+    comment: "unique_id = host MAC."
+
+  # --- Silver (later) ---
+  reauthentication-flow:
+    status: todo
+  test-coverage:
+    status: todo
+  parallel-updates:
+    status: todo
+  entity-unavailable:
+    status: done

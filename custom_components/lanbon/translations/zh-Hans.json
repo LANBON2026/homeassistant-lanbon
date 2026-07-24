@@ -1,0 +1,39 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "LANBON 主机",
+        "description": "填写 Mesh 根节点面板的 IP 与 Bearer Token（串口日志或 mDNS TXT）。",
+        "data": {
+          "host": "主机",
+          "port": "端口",
+          "token": "Token"
+        },
+        "data_description": {
+          "host": "Mesh 根节点面板的局域网 IP。",
+          "port": "本地 API 端口（默认 8765）。",
+          "token": "设备日志中 token= 后面的 32 位十六进制字符串。"
+        }
+      },
+      "discovery_confirm": {
+        "title": "发现 {name}",
+        "description": "添加 {name}（{host}）？",
+        "data": {
+          "token": "Token"
+        },
+        "data_description": {
+          "token": "若 mDNS 已广播会自动填入；否则从设备日志粘贴。"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "无法连接 LANBON 主机",
+      "invalid_auth": "Token 无效",
+      "not_root": "设备不是 Mesh 根节点 — 仅根节点提供本地 API",
+      "unknown": "未知错误"
+    },
+    "abort": {
+      "already_configured": "该主机已配置"
+    }
+  }
+}
