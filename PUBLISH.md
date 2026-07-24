@@ -3,7 +3,7 @@
 This repository **is** the HACS package root.
 
 1. HACS → Integrations → Custom repositories  
-2. URL: `https://github.com/lanbon/homeassistant-lanbon`  
+2. URL: `https://github.com/LANBON2026/homeassistant-lanbon`  
 3. Category: Integration  
 4. Download **LANBON** → Restart HA → Add Integration
 

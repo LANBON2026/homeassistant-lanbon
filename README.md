@@ -27,14 +27,11 @@ W (...) haLocal: HA local API up (mesh root). token=xxxxxxxx
 
 ### B. HACS
 
-> Publish this `homeassistant/` folder as its **own** git repository (recommended), then:
-
 1. HACS → Integrations → ⋮ → Custom repositories  
-2. URL = your HA repo, Category = **Integration**  
-3. Download **LANBON**, restart HA  
-4. Add Integration / accept discovery
-
-If you keep this tree inside the firmware monorepo, HACS must point at a repo whose root contains `custom_components/lanbon` (this folder’s layout).
+2. URL = `https://github.com/LANBON2026/homeassistant-lanbon`  
+3. Category = **Integration**  
+4. Download **LANBON**, restart HA  
+5. Add Integration / accept discovery
 
 ## Prerequisites
 
