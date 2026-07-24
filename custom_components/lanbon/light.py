@@ -25,9 +25,8 @@ def _dev_bri_from_ha(v: int) -> int:
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    data = hass.data[DOMAIN][entry.entry_id]
-    coordinator: LanbonCoordinator = data["coordinator"]
-    api = data["api"]
+    coordinator = entry.runtime_data.coordinator
+    api = entry.runtime_data.api
     entities = []
     for dev in (coordinator.data or {}).get("devices") or []:
         if dev.get("kind") != "light":

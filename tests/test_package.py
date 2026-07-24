@@ -29,7 +29,7 @@ def test_manifest_version_and_zeroconf():
     assert data["config_flow"] is True
     assert data["iot_class"] == "local_push"
     assert "_lanbon._tcp.local." in data["zeroconf"]
-    assert data["version"] == "0.2.0"
+    assert data["version"] == "0.2.2"
 
 
 def test_dev_type_name_maps():

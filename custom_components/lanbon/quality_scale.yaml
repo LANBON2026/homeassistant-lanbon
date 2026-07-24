@@ -5,32 +5,34 @@
 rules:
   # --- Bronze ---
   action-setup:
-    status: todo
-    comment: "Move lanbon.set_channel_name registration to async_setup style when porting to core."
+    status: done
+    comment: "Service registered on setup; removed when last entry unloads."
   appropriate-polling:
     status: done
     comment: "WS push primary; 30s HTTP poll fallback."
   brands:
-    status: todo
-    comment: "Submit logo/icon to home-assistant/brands when opening Core PR."
+    status: exempt
+    comment: "HA>=2026.3 local brand/; core_integrations only after Core merge."
   category:
     status: done
     comment: "Hub / local panel control."
   config-flow:
     status: done
   config-flow-test-coverage:
-    status: todo
+    status: done
+    comment: "tests/test_config_flow.py (user/zeroconf/auth/connect/not_root)."
   dependency-transparency:
     status: done
     comment: "No PyPI deps; aiohttp via HA."
   docs-description:
-    status: todo
-    comment: "Need home-assistant.io integration page for Core."
+    status: done
+    comment: "docs/lanbon.markdown draft for home-assistant.io."
   docs-installation-instructions:
     status: done
-    comment: "README covers HACS + manual."
+    comment: "README + lanbon.markdown."
   docs-removal-instructions:
-    status: todo
+    status: done
+    comment: "docs/lanbon.markdown Removing section."
   entity-event-setup:
     status: done
   entity-unique-id:
@@ -38,8 +40,8 @@ rules:
   has-entity-name:
     status: done
   runtime-data:
-    status: todo
-    comment: "Use ConfigEntry.runtime_data when targeting newer HA core style."
+    status: done
+    comment: "LanbonRuntimeData on ConfigEntry.runtime_data."
   test-before-configure:
     status: done
     comment: "config_flow validates via GET /api/v1/info."

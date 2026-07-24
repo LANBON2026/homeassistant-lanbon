@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.2 — 2026-07-24
+
+### Changed
+- Use `ConfigEntry.runtime_data` (`LanbonRuntimeData`) instead of `hass.data`
+- Service `set_channel_name` unload when last config entry is removed (Bronze action-setup)
+
+### Added
+- Config flow unit tests (`tests/test_config_flow.py`)
+- HA.io documentation draft (`docs/lanbon.markdown`)
+
 ## 0.2.1 — 2026-07-24
 
 ### Fixed

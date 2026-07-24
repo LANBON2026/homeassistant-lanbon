@@ -5,7 +5,7 @@ Local integration for **LANBON Mesh root** panels (HTTP + WebSocket, no cloud re
 | | |
 |---|---|
 | Domain | `lanbon` |
-| Version | **0.2.0** |
+| Version | **0.2.2** |
 | Discovery | mDNS `_lanbon._tcp` |
 | API port | **8765** |
 | IoT class | `local_push` |

@@ -3,13 +3,13 @@
 Use this checklist before opening a PR against [home-assistant/core](https://github.com/home-assistant/core).
 Rules: [Quality scale checklist](https://developers.home-assistant.io/docs/core/integration-quality-scale/checklist/).
 
-## Repos to open (3 PRs)
+## Repos to open (3 PRs) — still pending
 
 1. **Core** — `homeassistant/components/lanbon/` (code from this package)
-2. **Brands** — `home-assistant/brands` — `lanbon/icon.png` + `logo.png` (see `custom_components/lanbon/brand/`)
-3. **Docs** — `home-assistant/home-assistant.io` — `source/_integrations/lanbon.markdown`
+2. **Brands** — `home-assistant/brands` → `core_integrations/lanbon/` (**only after** Core accepts the integration; custom_integrations PRs are rejected)
+3. **Docs** — `home-assistant/home-assistant.io` — copy from [docs/lanbon.markdown](docs/lanbon.markdown)
 
-## Bronze status (LANBON 0.2.0)
+## Bronze status (LANBON **0.2.2**)
 
 | Rule | Status | Notes |
 |---|---|---|
@@ -20,22 +20,25 @@ Rules: [Quality scale checklist](https://developers.home-assistant.io/docs/core/
 | entity-unique-id | Done | `{mac}_sw_{i}` etc. |
 | has-entity-name | Done | |
 | appropriate-polling | Done | WS + 30s poll |
-| docs-installation-instructions | Done (HACS README) | Need HA.io page for Core |
-| brands | exempt | HA ≥2026.3 uses local `brand/`; brands repo rejects custom_integrations PRs |
-| config-flow-test-coverage | Todo | pytest in core tree |
-| action-setup | Todo | Core service registration style |
-| docs-description / removal | Todo | HA.io |
+| docs-installation-instructions | Done | README + `docs/lanbon.markdown` |
+| docs-description / removal | Done | `docs/lanbon.markdown` |
+| brands | Exempt (pre-Core) | Local `brand/` for HA≥2026.3 |
+| config-flow-test-coverage | Done | `tests/test_config_flow.py` |
+| action-setup | Done | Service register / last-entry remove |
+| runtime-data | Done | `LanbonRuntimeData` |
 | reauthentication-flow | Todo (Silver) | Token change |
 
 ## Before Core PR
 
-- [ ] Split / publish public git repo for HA (not only firmware monorepo)
-- [ ] Replace `manifest.json` `documentation` / `issue_tracker` / `codeowners` with real URLs
-- [ ] Remove HACS-only files from the Core copy (`hacs.json`, tools_*.py)
-- [ ] Add `tests/components/lanbon/` with mocked aiohttp (info / devices / command / WS)
-- [ ] Run `python -m script.hassfest` and `pytest tests/components/lanbon`
-- [ ] Confirm firmware `proto: 1` devices available for reviewers (or provide mock)
-- [ ] English-only strings in Core; keep translations in `translations/`
+- [x] Split / publish public git repo — https://github.com/LANBON2026/homeassistant-lanbon
+- [x] Replace `manifest.json` `documentation` / `issue_tracker` / `codeowners` with real URLs
+- [x] English base strings + translations
+- [x] Add config_flow tests with mocked API (`tests/test_config_flow.py`)
+- [x] Draft HA.io page (`docs/lanbon.markdown`)
+- [ ] Remove HACS-only files from the Core copy (`hacs.json`, `tools_*.py`) when opening the PR
+- [ ] Open Core PR + run `script.hassfest` / `pytest tests/components/lanbon` in core tree
+- [ ] Open home-assistant.io PR from `docs/lanbon.markdown`
+- [ ] After Core merge: brands `core_integrations/lanbon/`
 
 ## Do not expand yet
 

@@ -28,9 +28,8 @@ def _channel_name(dev: dict[str, Any] | None, index: int) -> str | None:
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    data = hass.data[DOMAIN][entry.entry_id]
-    coordinator: LanbonCoordinator = data["coordinator"]
-    api = data["api"]
+    coordinator = entry.runtime_data.coordinator
+    api = entry.runtime_data.api
 
     entities: list[LanbonSwitch] = []
     for dev in (coordinator.data or {}).get("devices") or []:

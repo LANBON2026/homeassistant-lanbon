@@ -1,10 +1,12 @@
 """LANBON integration setup."""
 from __future__ import annotations
 
+from dataclasses import dataclass
 import logging
+
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import ATTR_ENTITY_ID, CONF_HOST, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.helpers import config_validation as cv
@@ -30,7 +32,28 @@ SERVICE_SET_CHANNEL_NAME_SCHEMA = vol.Schema(
 )
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+@dataclass
+class LanbonRuntimeData:
+    """Runtime objects for one config entry."""
+
+    api: LanbonApi
+    coordinator: LanbonCoordinator
+
+
+LanbonConfigEntry = ConfigEntry  # runtime_data: LanbonRuntimeData
+
+
+def _find_switch(hass: HomeAssistant, entity_id: str):
+    for platform in async_get_platforms(hass, DOMAIN):
+        if platform.domain != "switch":
+            continue
+        ent = platform.entities.get(entity_id)
+        if ent is not None:
+            return ent
+    return None
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: LanbonConfigEntry) -> bool:
     host = entry.data[CONF_HOST]
     port = entry.data.get(CONF_PORT, 8765)
     token = entry.data[CONF_TOKEN]
@@ -38,12 +61,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = LanbonCoordinator(hass, api)
     await coordinator.async_config_entry_first_refresh()
 
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
-        "api": api,
-        "coordinator": coordinator,
-    }
+    entry.runtime_data = LanbonRuntimeData(api=api, coordinator=coordinator)
 
-    # Hub device
     host_mac = (entry.data.get("mac") or "").upper()
     data = coordinator.data or {}
     host_info = data.get("host") or {}
@@ -59,7 +78,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         model=str(host_info.get("kind") or "host"),
     )
 
-    # Child devices via hub
     for dev in data.get("devices") or []:
         mac = str(dev.get("mac") or "").upper()
         if not mac or mac == host_mac:
@@ -76,24 +94,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await api.async_start_ws(coordinator.handle_ws)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    def _find_switch(entity_id: str):
-        for platform in async_get_platforms(hass, DOMAIN):
-            if platform.domain != "switch":
-                continue
-            ent = platform.entities.get(entity_id)
-            if ent is not None:
-                return ent
-        return None
-
     async def async_set_channel_name(call: ServiceCall) -> None:
         name = str(call.data["name"]).strip()
         for entity_id in call.data[ATTR_ENTITY_ID]:
-            ent = _find_switch(entity_id)
+            ent = _find_switch(hass, entity_id)
             if ent is None:
                 _LOGGER.warning("set_channel_name: %s not a LANBON switch", entity_id)
                 continue
             await ent.async_set_channel_name(name)
 
+    # action-setup: register once; remove when last entry unloads
     if not hass.services.has_service(DOMAIN, SERVICE_SET_CHANNEL_NAME):
         hass.services.async_register(
             DOMAIN,
@@ -113,7 +123,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entity_id = event.data.get("entity_id")
         if not entity_id or not str(entity_id).startswith("switch."):
             return
-        ent = _find_switch(entity_id)
+        ent = _find_switch(hass, entity_id)
         if ent is None:
             return
         if getattr(ent, "_suppress_registry_push", False):
@@ -140,11 +150,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: LanbonConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    data = hass.data[DOMAIN].pop(entry.entry_id, None)
-    if data and data.get("api"):
-        await data["api"].async_stop_ws()
-    if not hass.data.get(DOMAIN):
+    if not unload_ok:
+        return False
+    await entry.runtime_data.api.async_stop_ws()
+    if (
+        not any(
+            e.entry_id != entry.entry_id and e.state is ConfigEntryState.LOADED
+            for e in hass.config_entries.async_entries(DOMAIN)
+        )
+        and hass.services.has_service(DOMAIN, SERVICE_SET_CHANNEL_NAME)
+    ):
         hass.services.async_remove(DOMAIN, SERVICE_SET_CHANNEL_NAME)
-    return unload_ok
+    return True
