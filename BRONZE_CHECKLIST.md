@@ -21,7 +21,7 @@ Rules: [Quality scale checklist](https://developers.home-assistant.io/docs/core/
 | has-entity-name | Done | |
 | appropriate-polling | Done | WS + 30s poll |
 | docs-installation-instructions | Done (HACS README) | Need HA.io page for Core |
-| brands | Todo | Submit brand assets |
+| brands | exempt | HA ≥2026.3 uses local `brand/`; brands repo rejects custom_integrations PRs |
 | config-flow-test-coverage | Todo | pytest in core tree |
 | action-setup | Todo | Core service registration style |
 | docs-description / removal | Todo | HA.io |

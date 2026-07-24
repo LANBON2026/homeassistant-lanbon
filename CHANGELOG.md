@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1 — 2026-07-24
+
+### Fixed
+- Brand images resized to HA brands specs; added `@2x` assets in `brand/`
+- Require Home Assistant **≥ 2026.3.0** so local `brand/` icons show in the UI
+
+### Note
+- `home-assistant/brands` no longer accepts custom-integration icons (auto-closed). Icons ship inside this repo under `custom_components/lanbon/brand/`.
+
 ## 0.2.0 — 2026-07-24
 
 ### Added

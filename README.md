@@ -9,6 +9,7 @@ Local integration for **LANBON Mesh root** panels (HTTP + WebSocket, no cloud re
 | Discovery | mDNS `_lanbon._tcp` |
 | API port | **8765** |
 | IoT class | `local_push` |
+| Min HA | **2026.3.0** (required for integration `brand/` icons) |
 
 ## Install
 
