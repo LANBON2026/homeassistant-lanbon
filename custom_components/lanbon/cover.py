@@ -17,6 +17,9 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import LanbonCoordinator
 
+# Panel pause gear — custom state; UI label via translation_key ("停止").
+STATE_STOPPED = "stopped"
+
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
@@ -39,6 +42,7 @@ async def async_setup_entry(
 
 class LanbonCover(CoordinatorEntity[LanbonCoordinator], CoverEntity):
     _attr_has_entity_name = True
+    _attr_translation_key = "curtain"
     _attr_device_class = CoverDeviceClass.CURTAIN
     _attr_supported_features = (
         CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE | CoverEntityFeature.STOP
@@ -76,17 +80,24 @@ class LanbonCover(CoordinatorEntity[LanbonCoordinator], CoverEntity):
 
     @property
     def is_closed(self) -> bool | None:
-        """Map panel gear to HA cover state.
-
-        Panel gears are momentary (open/pause/close). Pause must not look like
-        fully open — otherwise HA greys out the Open button.
-        """
+        """Only True/False for fully closed/open; pause is neither."""
         st = self._state_str()
         if st == "closed":
             return True
         if st == "open":
             return False
-        # stopped / unknown: both Open and Close stay clickable
+        return None
+
+    @property
+    def state(self) -> str | None:
+        """Report pause as stopped (显示「停止」), not unknown."""
+        st = self._state_str()
+        if st == "open":
+            return "open"
+        if st == "closed":
+            return "closed"
+        if st == "stopped":
+            return STATE_STOPPED
         return None
 
     async def async_open_cover(self, **kwargs: Any) -> None:

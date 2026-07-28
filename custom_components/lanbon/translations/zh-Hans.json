@@ -35,5 +35,14 @@
     "abort": {
       "already_configured": "该主机已配置"
     }
+  },
+  "entity": {
+    "cover": {
+      "curtain": {
+        "state": {
+          "stopped": "停止"
+        }
+      }
+    }
   }
 }

@@ -35,5 +35,14 @@
     "abort": {
       "already_configured": "This host is already configured"
     }
+  },
+  "entity": {
+    "cover": {
+      "curtain": {
+        "state": {
+          "stopped": "Stopped"
+        }
+      }
+    }
   }
 }
