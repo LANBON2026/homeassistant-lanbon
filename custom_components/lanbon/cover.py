@@ -3,7 +3,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.cover import CoverEntity, CoverEntityFeature
+from homeassistant.components.cover import (
+    CoverDeviceClass,
+    CoverEntity,
+    CoverEntityFeature,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
@@ -35,6 +39,7 @@ async def async_setup_entry(
 
 class LanbonCover(CoordinatorEntity[LanbonCoordinator], CoverEntity):
     _attr_has_entity_name = True
+    _attr_device_class = CoverDeviceClass.CURTAIN
     _attr_supported_features = (
         CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE | CoverEntityFeature.STOP
     )
@@ -71,10 +76,18 @@ class LanbonCover(CoordinatorEntity[LanbonCoordinator], CoverEntity):
 
     @property
     def is_closed(self) -> bool | None:
+        """Map panel gear to HA cover state.
+
+        Panel gears are momentary (open/pause/close). Pause must not look like
+        fully open — otherwise HA greys out the Open button.
+        """
         st = self._state_str()
-        if st is None:
-            return None
-        return st == "closed"
+        if st == "closed":
+            return True
+        if st == "open":
+            return False
+        # stopped / unknown: both Open and Close stay clickable
+        return None
 
     async def async_open_cover(self, **kwargs: Any) -> None:
         await self._api.async_command(
