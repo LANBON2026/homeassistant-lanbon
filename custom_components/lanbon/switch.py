@@ -31,27 +31,27 @@ async def async_setup_entry(
     coordinator = entry.runtime_data.coordinator
     api = entry.runtime_data.api
 
-    entities: list[LanbonSwitch] = []
+    entities: list[SwitchEntity] = []
     for dev in (coordinator.data or {}).get("devices") or []:
         kind = dev.get("kind")
-        switches = dev.get("switches")
-        if not isinstance(switches, list):
-            continue
-        if kind not in ("switch", "cover_switch"):
-            if kind != "cover_switch":
-                continue
         mac = str(dev.get("mac") or "").upper()
-        for idx, _val in enumerate(switches):
-            entities.append(
-                LanbonSwitch(
-                    coordinator,
-                    api,
-                    mac,
-                    idx,
-                    _channel_name(dev, idx),
-                    bool(dev.get("is_host")),
+        is_host = bool(dev.get("is_host"))
+        switches = dev.get("switches")
+        if isinstance(switches, list) and kind in ("switch", "cover_switch"):
+            for idx, _val in enumerate(switches):
+                entities.append(
+                    LanbonSwitch(
+                        coordinator,
+                        api,
+                        mac,
+                        idx,
+                        _channel_name(dev, idx),
+                        is_host,
+                    )
                 )
-            )
+        if kind == "fan":
+            # esdtFan / esdtFanEx: light bit → separate switch entity
+            entities.append(LanbonFanLightSwitch(coordinator, api, mac, is_host))
     async_add_entities(entities)
 
 
@@ -151,5 +151,52 @@ class LanbonSwitch(CoordinatorEntity[LanbonCoordinator], SwitchEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self._api.async_command(
             {"mac": self._mac, "op": "switch_set", "index": self._index, "on": False}
+        )
+        await self.coordinator.async_request_refresh()
+
+
+class LanbonFanLightSwitch(CoordinatorEntity[LanbonCoordinator], SwitchEntity):
+    """Light channel on esdtFan / esdtFanEx panels."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Light"
+    _attr_translation_key = "fan_light"
+
+    def __init__(self, coordinator, api, mac: str, is_host: bool) -> None:
+        super().__init__(coordinator)
+        self._api = api
+        self._mac = mac
+        self._attr_unique_id = f"{mac}_fan_light"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, mac)},
+            manufacturer="LANBON",
+            name="LANBON Host" if is_host else f"LANBON {mac[-4:]}",
+        )
+
+    def _dev(self) -> dict[str, Any] | None:
+        for d in (self.coordinator.data or {}).get("devices") or []:
+            if str(d.get("mac") or "").upper() == self._mac:
+                return d
+        return None
+
+    @property
+    def available(self) -> bool:
+        dev = self._dev()
+        return bool(dev and dev.get("available", True))
+
+    @property
+    def is_on(self) -> bool | None:
+        dev = self._dev()
+        return None if not dev else bool(dev.get("light"))
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self._api.async_command(
+            {"mac": self._mac, "op": "fan_set", "light": True}
+        )
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self._api.async_command(
+            {"mac": self._mac, "op": "fan_set", "light": False}
         )
         await self.coordinator.async_request_refresh()

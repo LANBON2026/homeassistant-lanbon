@@ -19,7 +19,7 @@ from .coordinator import LanbonApi, LanbonCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.SWITCH, Platform.LIGHT, Platform.COVER]
+PLATFORMS = [Platform.SWITCH, Platform.LIGHT, Platform.COVER, Platform.FAN]
 _EVENT_ENTITY_REGISTRY_UPDATED = getattr(
     er, "EVENT_ENTITY_REGISTRY_UPDATED", "entity_registry_updated"
 )

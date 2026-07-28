@@ -17,7 +17,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import LanbonCoordinator
 
-# Panel pause gear — custom state; UI label via translation_key ("停止").
+STATE_OPENING = "opening"
+STATE_CLOSING = "closing"
 STATE_STOPPED = "stopped"
 
 
@@ -79,23 +80,27 @@ class LanbonCover(CoordinatorEntity[LanbonCoordinator], CoverEntity):
         return False
 
     @property
+    def is_opening(self) -> bool:
+        return self._state_str() == "opening"
+
+    @property
+    def is_closing(self) -> bool:
+        return self._state_str() == "closing"
+
+    @property
     def is_closed(self) -> bool | None:
-        """Only True/False for fully closed/open; pause is neither."""
-        st = self._state_str()
-        if st == "closed":
-            return True
-        if st == "open":
-            return False
+        """No resting open/closed — panel gears are motion/stop only."""
         return None
 
     @property
     def state(self) -> str | None:
-        """Report pause as stopped (显示「停止」), not unknown."""
+        """正在开启 / 正在关闭 / 停止."""
         st = self._state_str()
-        if st == "open":
-            return "open"
-        if st == "closed":
-            return "closed"
+        # Accept legacy open/closed from older firmware too
+        if st in ("opening", "open"):
+            return STATE_OPENING
+        if st in ("closing", "closed"):
+            return STATE_CLOSING
         if st == "stopped":
             return STATE_STOPPED
         return None

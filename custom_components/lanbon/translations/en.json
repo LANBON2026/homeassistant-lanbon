@@ -40,8 +40,20 @@
     "cover": {
       "curtain": {
         "state": {
+          "opening": "Opening",
+          "closing": "Closing",
           "stopped": "Stopped"
         }
+      }
+    },
+    "fan": {
+      "fan": {
+        "name": "Fan"
+      }
+    },
+    "switch": {
+      "fan_light": {
+        "name": "Light"
       }
     }
   }

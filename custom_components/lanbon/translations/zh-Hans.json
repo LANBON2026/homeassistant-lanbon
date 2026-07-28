@@ -40,8 +40,20 @@
     "cover": {
       "curtain": {
         "state": {
+          "opening": "正在开启",
+          "closing": "正在关闭",
           "stopped": "停止"
         }
+      }
+    },
+    "fan": {
+      "fan": {
+        "name": "风扇"
+      }
+    },
+    "switch": {
+      "fan_light": {
+        "name": "灯"
       }
     }
   }
