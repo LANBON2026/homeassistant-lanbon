@@ -14,12 +14,13 @@ from .const import DOMAIN
 from .coordinator import LanbonCoordinator
 
 
+# Device brightness is 0–100% (same as panel UI / HomeKit), HA light is 0–255.
 def _ha_bri_from_dev(v: int) -> int:
-    return max(0, min(255, int(round(v * 255 / 127)))) if v else 0
+    return max(0, min(255, int(round(v * 255 / 100)))) if v else 0
 
 
 def _dev_bri_from_ha(v: int) -> int:
-    return max(0, min(127, int(round(v * 127 / 255)))) if v else 0
+    return max(0, min(100, int(round(v * 100 / 255)))) if v else 0
 
 
 async def async_setup_entry(
