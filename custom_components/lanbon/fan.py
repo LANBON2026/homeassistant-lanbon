@@ -14,7 +14,7 @@ from homeassistant.util.percentage import (
     percentage_to_ordered_list_item,
 )
 
-from .const import DOMAIN, MANUFACTURER, format_device_name
+from .const import DOMAIN, MANUFACTURER, device_name_from_payload
 from .coordinator import LanbonCoordinator
 
 # Firmware enumDevFanGear: 0=stop, 1=first, 2=second, 3=third
@@ -63,15 +63,15 @@ class LanbonFan(CoordinatorEntity[LanbonCoordinator], FanEntity):
         self._api = api
         self._mac = mac
         self._attr_unique_id = f"{mac}_fan"
-        dev_name = None
+        dev_row = None
         for d in (coordinator.data or {}).get("devices") or []:
             if str(d.get("mac") or "").upper() == mac:
-                dev_name = d.get("name")
+                dev_row = d
                 break
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, mac)},
             manufacturer=MANUFACTURER,
-            name=format_device_name(mac=mac, is_host=is_host, name=dev_name),
+            name=device_name_from_payload(dev_row, mac=mac, is_host=is_host),
         )
 
     def _dev(self) -> dict[str, Any] | None:

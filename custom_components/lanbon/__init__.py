@@ -19,7 +19,7 @@ from .const import (
     DOMAIN,
     MANUFACTURER,
     SERVICE_SET_CHANNEL_NAME,
-    format_device_name,
+    device_name_from_payload,
 )
 from .coordinator import LanbonApi, LanbonCoordinator
 
@@ -59,6 +59,55 @@ def _find_switch(hass: HomeAssistant, entity_id: str):
     return None
 
 
+def _sync_devices_from_snapshot(
+    hass: HomeAssistant, entry: LanbonConfigEntry, data: dict
+) -> None:
+    """Create/update device registry entries for host + every child (all types)."""
+    registry = dr.async_get(hass)
+    host_info = data.get("host") or {}
+    host_mac = (entry.data.get("mac") or "").upper()
+    if not host_mac:
+        host_mac = str(host_info.get("mac") or entry.data.get(CONF_HOST) or "").upper()
+
+    devices = list(data.get("devices") or [])
+    host_dev = next(
+        (d for d in devices if str(d.get("mac") or "").upper() == host_mac),
+        None,
+    )
+    if host_dev is None and host_info:
+        host_dev = {**host_info, "mac": host_mac, "is_host": True}
+
+    hub = registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, host_mac)},
+        manufacturer=MANUFACTURER,
+        name=device_name_from_payload(host_dev, mac=host_mac, is_host=True),
+        model=str((host_dev or {}).get("kind") or host_info.get("kind") or "host"),
+    )
+    # Force rename even when device already existed with old "LANBON …" name.
+    if hub.name_by_user is None:
+        want = device_name_from_payload(host_dev, mac=host_mac, is_host=True)
+        if hub.name != want:
+            registry.async_update_device(hub.id, name=want)
+
+    for dev in devices:
+        mac = str(dev.get("mac") or "").upper()
+        if not mac or mac == host_mac:
+            continue
+        is_host = bool(dev.get("is_host"))
+        want = device_name_from_payload(dev, mac=mac, is_host=is_host)
+        device = registry.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            identifiers={(DOMAIN, mac)},
+            manufacturer=MANUFACTURER,
+            name=want,
+            model=str(dev.get("kind") or "node"),
+            via_device=hub.id,
+        )
+        if device.name_by_user is None and device.name != want:
+            registry.async_update_device(device.id, name=want)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: LanbonConfigEntry) -> bool:
     host = entry.data[CONF_HOST]
     port = entry.data.get(CONF_PORT, 8765)
@@ -69,45 +118,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: LanbonConfigEntry) -> bo
 
     entry.runtime_data = LanbonRuntimeData(api=api, coordinator=coordinator)
 
-    host_mac = (entry.data.get("mac") or "").upper()
-    data = coordinator.data or {}
-    host_info = data.get("host") or {}
-    if not host_mac:
-        host_mac = str(host_info.get("mac") or host).upper()
+    _sync_devices_from_snapshot(hass, entry, coordinator.data or {})
 
-    registry = dr.async_get(hass)
-    # Prefer host row inside devices[] (has firmware type_name); fall back to host{}.
-    host_dev = next(
-        (
-            d
-            for d in (data.get("devices") or [])
-            if str(d.get("mac") or "").upper() == host_mac
-        ),
-        None,
-    )
-    host_label = (host_dev or host_info).get("name")
-    hub = registry.async_get_or_create(
-        config_entry_id=entry.entry_id,
-        identifiers={(DOMAIN, host_mac)},
-        manufacturer=MANUFACTURER,
-        name=format_device_name(mac=host_mac, is_host=True, name=host_label),
-        model=str((host_dev or host_info).get("kind") or "host"),
-    )
+    @callback
+    def _on_coordinator_update() -> None:
+        _sync_devices_from_snapshot(hass, entry, coordinator.data or {})
 
-    for dev in data.get("devices") or []:
-        mac = str(dev.get("mac") or "").upper()
-        if not mac or mac == host_mac:
-            continue
-        registry.async_get_or_create(
-            config_entry_id=entry.entry_id,
-            identifiers={(DOMAIN, mac)},
-            manufacturer=MANUFACTURER,
-            name=format_device_name(
-                mac=mac, is_host=False, name=dev.get("name")
-            ),
-            model=str(dev.get("kind") or "node"),
-            via_device=hub.id,
-        )
+    entry.async_on_unload(coordinator.async_add_listener(_on_coordinator_update))
 
     await api.async_start_ws(coordinator.handle_ws)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
