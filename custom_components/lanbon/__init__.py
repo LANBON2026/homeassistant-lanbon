@@ -14,7 +14,13 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import async_get_platforms
 
-from .const import CONF_TOKEN, DOMAIN, SERVICE_SET_CHANNEL_NAME
+from .const import (
+    CONF_TOKEN,
+    DOMAIN,
+    MANUFACTURER,
+    SERVICE_SET_CHANNEL_NAME,
+    format_device_name,
+)
 from .coordinator import LanbonApi, LanbonCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -70,12 +76,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: LanbonConfigEntry) -> bo
         host_mac = str(host_info.get("mac") or host).upper()
 
     registry = dr.async_get(hass)
+    # Prefer host row inside devices[] (has firmware type_name); fall back to host{}.
+    host_dev = next(
+        (
+            d
+            for d in (data.get("devices") or [])
+            if str(d.get("mac") or "").upper() == host_mac
+        ),
+        None,
+    )
+    host_label = (host_dev or host_info).get("name")
     hub = registry.async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, host_mac)},
-        manufacturer="LANBON",
-        name=host_info.get("name") or f"LANBON {host_mac[-4:]}",
-        model=str(host_info.get("kind") or "host"),
+        manufacturer=MANUFACTURER,
+        name=format_device_name(mac=host_mac, is_host=True, name=host_label),
+        model=str((host_dev or host_info).get("kind") or "host"),
     )
 
     for dev in data.get("devices") or []:
@@ -85,8 +101,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: LanbonConfigEntry) -> bo
         registry.async_get_or_create(
             config_entry_id=entry.entry_id,
             identifiers={(DOMAIN, mac)},
-            manufacturer="LANBON",
-            name=dev.get("name") or f"LANBON {mac[-4:]}",
+            manufacturer=MANUFACTURER,
+            name=format_device_name(
+                mac=mac, is_host=False, name=dev.get("name")
+            ),
             model=str(dev.get("kind") or "node"),
             via_device=hub.id,
         )
