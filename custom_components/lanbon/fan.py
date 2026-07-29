@@ -48,12 +48,15 @@ class LanbonFan(CoordinatorEntity[LanbonCoordinator], FanEntity):
     _attr_has_entity_name = True
     _attr_name = "Fan"
     _attr_translation_key = "fan"
+    # HA has no SET_PERCENTAGE flag — percentage API is gated by SET_SPEED.
     _attr_supported_features = (
-        FanEntityFeature.SET_PERCENTAGE
+        FanEntityFeature.SET_SPEED
         | FanEntityFeature.TURN_ON
         | FanEntityFeature.TURN_OFF
     )
     _attr_speed_count = len(_ORDERED_GEARS)
+    # Migrated: declare TURN_ON/TURN_OFF explicitly (HA ≥ 2024.8).
+    _enable_turn_on_off_backwards_compatibility = False
 
     def __init__(self, coordinator, api, mac: str, is_host: bool) -> None:
         super().__init__(coordinator)

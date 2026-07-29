@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.7 — 2026-07-29
+
+### Fixed
+- Fan platform import crash: use `FanEntityFeature.SET_SPEED` (HA has no `SET_PERCENTAGE` feature flag). Adding a fan panel via HACS left the config entry unable to set up.
+
+## 0.2.6 — 2026-07-29
+
+### Added
+- Fan platform for `esdtFan` / `esdtFanEx` (percentage gears 1–3)
+- FanEx light channel as a separate switch entity
+- Curtain states: opening / closing / stopped
+
+## 0.2.3 — 2026-07-28
+
+### Fixed
+- Dimmer brightness mapped 0–100% 1:1 with panel (not 0–127)
+
 ## 0.2.2 — 2026-07-24
 
 ### Changed
