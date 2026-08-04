@@ -9,9 +9,6 @@ CONF_TOKEN = "token"
 CONF_HOST = "host"
 CONF_PORT = "port"
 SERVICE_SET_CHANNEL_NAME = "set_channel_name"
-
-# Device registry display name prefix (all types, host + children).
-DEVICE_NAME_PREFIX = "LANBON-L10"
 MANUFACTURER = "LANBON"
 
 
@@ -22,10 +19,10 @@ def format_device_name(
     name: str | None = None,
     sw_type: int | str | None = None,
 ) -> str:
-    """Always return a LANBON-L10-prefixed device name.
+    """Device registry name from firmware (product line decided by panel).
 
-    Prefer firmware ``name`` (type label). If missing, map ``sw_type``.
-    Fall back to Host / MAC suffix.
+    Prefer firmware ``name`` / ``type_name``. If missing, map ``sw_type``.
+    Fall back to Host / MAC suffix. No hardcoded L8/L10 prefix here.
     """
     text = (name or "").strip()
     if not text and sw_type is not None:
@@ -33,25 +30,21 @@ def format_device_name(
         from .device_types import dev_type_name
 
         mapped = dev_type_name(sw_type)
-        if mapped and mapped not in (DEVICE_NAME_PREFIX, "LANBON"):
+        if mapped and mapped != "LANBON":
             text = mapped
 
-    # Strip any previous LANBON / LANBON-L10 prefix before re-applying.
-    if text:
-        for old in (DEVICE_NAME_PREFIX, "LANBON"):
-            if text == old:
-                text = ""
-                break
-            if text.startswith(f"{old} "):
-                text = text[len(old) :].strip(" -_")
-                break
+    # Strip legacy HACS-only "LANBON-L10 …" so reload renames cleanly.
+    if text.startswith("LANBON-L10 "):
+        text = text[len("LANBON-L10 ") :].strip()
+    elif text == "LANBON-L10":
+        text = ""
 
     if text:
-        return f"{DEVICE_NAME_PREFIX} {text}"
+        return text
     if is_host:
-        return f"{DEVICE_NAME_PREFIX} Host"
+        return "LANBON Host"
     suffix = (mac or "")[-4:].upper()
-    return f"{DEVICE_NAME_PREFIX} {suffix}".rstrip()
+    return f"LANBON {suffix}".rstrip() if suffix else "LANBON"
 
 
 def device_name_from_payload(

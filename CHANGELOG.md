@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.10 — 2026-08-04
+
+### Changed
+- Device registry names no longer hardcode `LANBON-L10`. Display name comes from firmware `name` / `type_name` (e.g. L8 → `L8 switch`, L10 → `L10 4gang Switch`). Legacy `LANBON-L10 …` names are stripped on reload when the user has not overridden them.
+
 ## 0.2.7 — 2026-07-29
 
 ### Fixed
