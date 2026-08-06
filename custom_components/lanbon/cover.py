@@ -14,7 +14,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, MANUFACTURER, device_name_from_payload
+from .const import DOMAIN
 from .coordinator import LanbonCoordinator
 
 STATE_OPENING = "opening"
@@ -56,15 +56,10 @@ class LanbonCover(CoordinatorEntity[LanbonCoordinator], CoverEntity):
         self._index = index
         self._attr_unique_id = f"{mac}_cover_{index}"
         self._attr_name = "Curtain" if index == 0 else f"Curtain {index + 1}"
-        dev_row = None
-        for d in (coordinator.data or {}).get("devices") or []:
-            if str(d.get("mac") or "").upper() == mac:
-                dev_row = d
-                break
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, mac)},
-            manufacturer=MANUFACTURER,
-            name=device_name_from_payload(dev_row, mac=mac, is_host=is_host),
+            manufacturer="LANBON",
+            name="LANBON Host" if is_host else f"LANBON {mac[-4:]}",
         )
 
     def _state_str(self) -> str | None:
@@ -79,6 +74,8 @@ class LanbonCover(CoordinatorEntity[LanbonCoordinator], CoverEntity):
 
     @property
     def available(self) -> bool:
+        if not super().available:
+            return False
         for d in (self.coordinator.data or {}).get("devices") or []:
             if str(d.get("mac") or "").upper() == self._mac:
                 return bool(d.get("available", True))

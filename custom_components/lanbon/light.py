@@ -10,17 +10,16 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, MANUFACTURER, device_name_from_payload
+from .const import DOMAIN
 from .coordinator import LanbonCoordinator
 
 
-# Device brightness is 0–100% (same as panel UI / HomeKit), HA light is 0–255.
 def _ha_bri_from_dev(v: int) -> int:
-    return max(0, min(255, int(round(v * 255 / 100)))) if v else 0
+    return max(0, min(255, int(round(v * 255 / 127)))) if v else 0
 
 
 def _dev_bri_from_ha(v: int) -> int:
-    return max(0, min(100, int(round(v * 100 / 255)))) if v else 0
+    return max(0, min(127, int(round(v * 127 / 255)))) if v else 0
 
 
 async def async_setup_entry(
@@ -48,15 +47,10 @@ class LanbonLight(CoordinatorEntity[LanbonCoordinator], LightEntity):
         self._api = api
         self._mac = mac
         self._attr_unique_id = f"{mac}_light"
-        dev_row = None
-        for d in (coordinator.data or {}).get("devices") or []:
-            if str(d.get("mac") or "").upper() == mac:
-                dev_row = d
-                break
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, mac)},
-            manufacturer=MANUFACTURER,
-            name=device_name_from_payload(dev_row, mac=mac, is_host=is_host),
+            manufacturer="LANBON",
+            name="LANBON Host" if is_host else f"LANBON {mac[-4:]}",
         )
 
     def _dev(self):
@@ -67,6 +61,8 @@ class LanbonLight(CoordinatorEntity[LanbonCoordinator], LightEntity):
 
     @property
     def available(self) -> bool:
+        if not super().available:
+            return False
         dev = self._dev()
         return bool(dev and dev.get("available", True))
 

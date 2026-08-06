@@ -11,7 +11,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, MANUFACTURER, device_name_from_payload
+from .const import DOMAIN
 from .coordinator import LanbonCoordinator
 
 
@@ -77,15 +77,10 @@ class LanbonSwitch(CoordinatorEntity[LanbonCoordinator], SwitchEntity):
         hub_mac = ""
         host = (coordinator.data or {}).get("host") or {}
         hub_mac = str(host.get("mac") or "").upper()
-        dev_row = None
-        for d in (coordinator.data or {}).get("devices") or []:
-            if str(d.get("mac") or "").upper() == mac:
-                dev_row = d
-                break
         di_kwargs: dict[str, Any] = {
             "identifiers": {(DOMAIN, mac)},
-            "manufacturer": MANUFACTURER,
-            "name": device_name_from_payload(dev_row, mac=mac, is_host=is_host),
+            "manufacturer": "LANBON",
+            "name": "LANBON Host" if is_host else f"LANBON {mac[-4:]}",
         }
         if (not is_host) and hub_mac:
             di_kwargs["via_device"] = (DOMAIN, hub_mac)
@@ -134,6 +129,9 @@ class LanbonSwitch(CoordinatorEntity[LanbonCoordinator], SwitchEntity):
 
     @property
     def available(self) -> bool:
+        # Hub reachable (coordinator) AND device.available (child keepalive).
+        if not super().available:
+            return False
         dev = self._dev()
         return bool(dev and dev.get("available", True))
 
@@ -172,15 +170,10 @@ class LanbonFanLightSwitch(CoordinatorEntity[LanbonCoordinator], SwitchEntity):
         self._api = api
         self._mac = mac
         self._attr_unique_id = f"{mac}_fan_light"
-        dev_row = None
-        for d in (coordinator.data or {}).get("devices") or []:
-            if str(d.get("mac") or "").upper() == mac:
-                dev_row = d
-                break
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, mac)},
-            manufacturer=MANUFACTURER,
-            name=device_name_from_payload(dev_row, mac=mac, is_host=is_host),
+            manufacturer="LANBON",
+            name="LANBON Host" if is_host else f"LANBON {mac[-4:]}",
         )
 
     def _dev(self) -> dict[str, Any] | None:
@@ -191,6 +184,8 @@ class LanbonFanLightSwitch(CoordinatorEntity[LanbonCoordinator], SwitchEntity):
 
     @property
     def available(self) -> bool:
+        if not super().available:
+            return False
         dev = self._dev()
         return bool(dev and dev.get("available", True))
 

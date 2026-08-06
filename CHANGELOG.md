@@ -1,9 +1,15 @@
 # Changelog
 
+## 0.2.11 — 2026-08-06
+
+### Fixed
+- Entity availability now follows hub reachability: `available = coordinator OK ∧ device.available`. Root unreachable → all entities unavailable; child keepalive 0 → that child only. Does not change control/rename when online.
+
 ## 0.2.10 — 2026-08-04
 
 ### Changed
-- Device registry names no longer hardcode `LANBON-L10`. Display name comes from firmware `name` / `type_name` (e.g. L8 → `L8 switch`, L10 → `L10 4gang Switch`). Legacy `LANBON-L10 …` names are stripped on reload when the user has not overridden them.
+- Device registry names no longer hardcode `LANBON-L10`. Display name comes from firmware `name` / `type_name`.
+- L10 firmware tags `name`/`type_name` with `L10 …` (same role as L8 embedding product in its label).
 
 ## 0.2.7 — 2026-07-29
 
