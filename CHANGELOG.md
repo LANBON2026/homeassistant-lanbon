@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.12 — 2026-08-07
+
+### Fixed
+- Stop WebSocket reconnect storms on HTTP-only panels (e.g. L8 `product=L8`, no `/api/v1/ws`). After product detection or 3 consecutive WS-reject handshakes, disable WS for that config entry and use 30s HTTP poll only. L10 (WS available) unchanged; transient offline does not disable WS.
+
 ## 0.2.11 — 2026-08-06
 
 ### Fixed

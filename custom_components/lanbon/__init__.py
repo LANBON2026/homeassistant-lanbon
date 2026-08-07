@@ -112,7 +112,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: LanbonConfigEntry) -> bo
     host = entry.data[CONF_HOST]
     port = entry.data.get(CONF_PORT, 8765)
     token = entry.data[CONF_TOKEN]
-    api = LanbonApi(hass, host, port, token)
+    api = LanbonApi(hass, host, port, token, entry=entry)
     coordinator = LanbonCoordinator(hass, api)
     await coordinator.async_config_entry_first_refresh()
 
@@ -126,7 +126,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: LanbonConfigEntry) -> bo
 
     entry.async_on_unload(coordinator.async_add_listener(_on_coordinator_update))
 
-    await api.async_start_ws(coordinator.handle_ws)
+    # L8 (HTTP-only) / persisted flag: never start WS. L10 keeps WS + 30s poll.
+    if api.ws_disabled or api.should_skip_ws_from_snapshot(coordinator.data or {}):
+        await api.async_disable_ws("HTTP-only panel or saved preference")
+    else:
+        await api.async_start_ws(coordinator.handle_ws)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     async def async_set_channel_name(call: ServiceCall) -> None:

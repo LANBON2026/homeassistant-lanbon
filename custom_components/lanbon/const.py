@@ -8,8 +8,25 @@ DEFAULT_PORT = 8765
 CONF_TOKEN = "token"
 CONF_HOST = "host"
 CONF_PORT = "port"
+CONF_WS_DISABLED = "ws_disabled"
 SERVICE_SET_CHANNEL_NAME = "set_channel_name"
 MANUFACTURER = "LANBON"
+
+# Consecutive WS handshake failures that prove the panel has no WS (not transient offline).
+WS_UNSUPPORTED_FAIL_THRESHOLD = 3
+
+# Firmware product tags that serve HTTP-only local API (no /api/v1/ws). L10 keeps WS.
+HTTP_ONLY_PRODUCTS = frozenset({"L8", "l8"})
+
+
+def product_is_http_only(product: Any) -> bool:
+    """True when firmware product line has no local WebSocket."""
+    if product is None:
+        return False
+    text = str(product).strip()
+    if not text:
+        return False
+    return text.upper() in {p.upper() for p in HTTP_ONLY_PRODUCTS}
 
 
 def format_device_name(

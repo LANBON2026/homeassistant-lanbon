@@ -8,28 +8,74 @@ from typing import Any
 
 import aiohttp
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import DEFAULT_PORT, DOMAIN
+from .const import (
+    CONF_WS_DISABLED,
+    DEFAULT_PORT,
+    DOMAIN,
+    WS_UNSUPPORTED_FAIL_THRESHOLD,
+    product_is_http_only,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
 
+def _is_ws_unsupported_error(err: BaseException) -> bool:
+    """True when the panel rejects WebSocket (not merely offline/unreachable)."""
+    if isinstance(err, aiohttp.ClientResponseError):
+        # L8 httpd: Upgrade → 400; missing URI → 404
+        if err.status in (400, 403, 404, 405, 501):
+            return True
+    msg = str(err).lower()
+    needles = (
+        "upgrade",
+        "websocket",
+        "ws protocol",
+        "400",
+        "404",
+        "not supported",
+        "invalid status",
+        "handshake",
+    )
+    return any(n in msg for n in needles)
+
+
 class LanbonApi:
-    def __init__(self, hass: HomeAssistant, host: str, port: int, token: str) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        host: str,
+        port: int,
+        token: str,
+        entry: ConfigEntry | None = None,
+    ) -> None:
         self.hass = hass
         self.host = host
         self.port = port or DEFAULT_PORT
         self.token = token
+        self._entry = entry
         self._session = async_get_clientsession(hass)
         self._ws_task: asyncio.Task | None = None
         self._listeners: list = []
+        self._ws_fail_count = 0
+        self._ws_disabled = False
+        if entry is not None:
+            self._ws_disabled = bool(
+                entry.options.get(CONF_WS_DISABLED)
+                or entry.data.get(CONF_WS_DISABLED)
+            )
 
     @property
     def base(self) -> str:
         return f"http://{self.host}:{self.port}"
+
+    @property
+    def ws_disabled(self) -> bool:
+        return self._ws_disabled
 
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.token}"}
@@ -67,8 +113,60 @@ class LanbonApi:
     def add_listener(self, cb) -> None:
         self._listeners.append(cb)
 
+    def should_skip_ws_from_snapshot(self, data: dict[str, Any] | None) -> bool:
+        """HTTP-only product (e.g. L8) or explicit ws=false in payload."""
+        if not isinstance(data, dict):
+            return False
+        host = data.get("host") if isinstance(data.get("host"), dict) else {}
+        product = data.get("product") or host.get("product")
+        if product is None:
+            # some firmwares put product on the host row inside devices[]
+            for dev in data.get("devices") or []:
+                if isinstance(dev, dict) and dev.get("is_host"):
+                    product = dev.get("product")
+                    host = dev
+                    break
+        if product_is_http_only(product):
+            return True
+        if host.get("ws") is False or host.get("websocket") is False:
+            return True
+        return False
+
+    def _persist_ws_disabled(self) -> None:
+        """Remember HTTP-poll-only so reload does not hammer Upgrade again."""
+        self._ws_disabled = True
+        entry = self._entry
+        if entry is None:
+            return
+        if entry.options.get(CONF_WS_DISABLED):
+            return
+        self.hass.config_entries.async_update_entry(
+            entry,
+            options={**entry.options, CONF_WS_DISABLED: True},
+        )
+
+    async def async_disable_ws(self, reason: str) -> None:
+        """Stop WS loop permanently for this config entry (HTTP poll remains)."""
+        if self._ws_disabled:
+            return
+        _LOGGER.warning(
+            "LANBON WebSocket disabled (%s); using HTTP poll only for %s:%s",
+            reason,
+            self.host,
+            self.port,
+        )
+        self._persist_ws_disabled()
+        await self.async_stop_ws()
+
     async def async_start_ws(self, on_message) -> None:
         self.add_listener(on_message)
+        if self._ws_disabled:
+            _LOGGER.info(
+                "LANBON WS already disabled for %s:%s (HTTP poll only)",
+                self.host,
+                self.port,
+            )
+            return
         if self._ws_task and not self._ws_task.done():
             return
         self._ws_task = self.hass.async_create_task(self._ws_loop())
@@ -84,11 +182,14 @@ class LanbonApi:
 
     async def _ws_loop(self) -> None:
         url = f"ws://{self.host}:{self.port}/api/v1/ws?token={self.token}"
-        while True:
+        while not self._ws_disabled:
             try:
                 async with self._session.ws_connect(url, heartbeat=30) as ws:
-                    _LOGGER.debug("LANBON WS connected %s", url)
+                    self._ws_fail_count = 0
+                    _LOGGER.debug("LANBON WS connected %s:%s", self.host, self.port)
                     async for msg in ws:
+                        if self._ws_disabled:
+                            return
                         if msg.type == aiohttp.WSMsgType.TEXT:
                             try:
                                 data = json.loads(msg.data)
@@ -104,7 +205,23 @@ class LanbonApi:
             except asyncio.CancelledError:
                 raise
             except Exception as err:  # noqa: BLE001
-                _LOGGER.warning("LANBON WS error: %s", err)
+                if _is_ws_unsupported_error(err):
+                    self._ws_fail_count += 1
+                    _LOGGER.warning(
+                        "LANBON WS unsupported (%s/%s) on %s:%s: %s",
+                        self._ws_fail_count,
+                        WS_UNSUPPORTED_FAIL_THRESHOLD,
+                        self.host,
+                        self.port,
+                        err,
+                    )
+                    if self._ws_fail_count >= WS_UNSUPPORTED_FAIL_THRESHOLD:
+                        await self.async_disable_ws("handshake rejected by panel")
+                        return
+                else:
+                    # Transient offline / network — keep retrying (L10 must not lock out).
+                    self._ws_fail_count = 0
+                    _LOGGER.warning("LANBON WS error: %s", err)
             await asyncio.sleep(5)
 
 
