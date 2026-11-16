@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.2 - 2026-11-16
+
+### Fixed
+- Restore local `brand/` icons and logos from 0.2.12 so HA 2026.3+ shows the LANBON mark (HACS-only; does not touch Core PR).
+
 ## 0.3.0 - 2026-11-16
 
 ### Changed
