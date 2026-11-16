@@ -1,113 +1,83 @@
-"""Fan entities for fan / fan+light panels (esdtFan / esdtFanEx)."""
+"""Fan entities from LOIP components with type=fan."""
+
 from __future__ import annotations
 
 from typing import Any
 
 from homeassistant.components.fan import FanEntity, FanEntityFeature
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.util.percentage import (
-    ordered_list_item_to_percentage,
-    percentage_to_ordered_list_item,
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+
+from . import LanbonConfigEntry
+from .entity import LanbonEntity, async_send_loip
+from .entity_map import (
+    _as_int,
+    fan_is_on,
+    iter_fan_components,
+    percentage_to_speed,
+    speed_levels,
+    speed_to_percentage,
 )
-
-from .const import DOMAIN, MANUFACTURER, device_name_from_payload
-from .coordinator import LanbonCoordinator
-
-# Firmware enumDevFanGear: 0=stop, 1=first, 2=second, 3=third
-_ORDERED_GEARS = [1, 2, 3]
-
-
-def _gear_from_dev(dev: dict[str, Any] | None) -> int:
-    if not dev:
-        return 0
-    try:
-        return max(0, min(3, int(dev.get("gear") or 0)))
-    except (TypeError, ValueError):
-        return 0
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: LanbonConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     coordinator = entry.runtime_data.coordinator
-    api = entry.runtime_data.api
-    entities = []
-    for dev in (coordinator.data or {}).get("devices") or []:
-        if dev.get("kind") != "fan":
-            continue
-        mac = str(dev.get("mac") or "").upper()
-        entities.append(LanbonFan(coordinator, api, mac, bool(dev.get("is_host"))))
+    entities = [
+        LanbonFan(coordinator, device.id, component.id)
+        for device, component in iter_fan_components(coordinator.data)
+    ]
     async_add_entities(entities)
 
 
-class LanbonFan(CoordinatorEntity[LanbonCoordinator], FanEntity):
-    _attr_has_entity_name = True
-    _attr_name = "Fan"
-    _attr_translation_key = "fan"
-    # HA has no SET_PERCENTAGE flag — percentage API is gated by SET_SPEED.
-    _attr_supported_features = (
-        FanEntityFeature.SET_SPEED
-        | FanEntityFeature.TURN_ON
-        | FanEntityFeature.TURN_OFF
-    )
-    _attr_speed_count = len(_ORDERED_GEARS)
-    # Migrated: declare TURN_ON/TURN_OFF explicitly (HA ≥ 2024.8).
-    _enable_turn_on_off_backwards_compatibility = False
+def _supported_features(has_speed: bool) -> FanEntityFeature:
+    features = FanEntityFeature(0)
+    for name in ("TURN_ON", "TURN_OFF"):
+        flag = getattr(FanEntityFeature, name, 0)
+        if flag:
+            features |= flag
+    if has_speed:
+        features |= FanEntityFeature.SET_SPEED
+    return features
 
-    def __init__(self, coordinator, api, mac: str, is_host: bool) -> None:
-        super().__init__(coordinator)
-        self._api = api
-        self._mac = mac
-        self._attr_unique_id = f"{mac}_fan"
-        dev_row = None
-        for d in (coordinator.data or {}).get("devices") or []:
-            if str(d.get("mac") or "").upper() == mac:
-                dev_row = d
-                break
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, mac)},
-            manufacturer=MANUFACTURER,
-            name=device_name_from_payload(dev_row, mac=mac, is_host=is_host),
-        )
 
-    def _dev(self) -> dict[str, Any] | None:
-        for d in (self.coordinator.data or {}).get("devices") or []:
-            if str(d.get("mac") or "").upper() == self._mac:
-                return d
-        return None
+class LanbonFan(LanbonEntity, FanEntity):
+    def _levels(self) -> list[int] | None:
+        _device, component = self._pair()
+        return speed_levels(component)
 
     @property
-    def available(self) -> bool:
-        # Hub reachable (coordinator) AND device.available (child keepalive).
-        if not super().available:
-            return False
-        dev = self._dev()
-        return bool(dev and dev.get("available", True))
+    def supported_features(self) -> FanEntityFeature:
+        return _supported_features(bool(self._levels()))
+
+    @property
+    def speed_count(self) -> int:
+        levels = self._levels()
+        return len(levels) if levels else 0
 
     @property
     def is_on(self) -> bool | None:
-        return _gear_from_dev(self._dev()) != 0
+        _device, component = self._pair()
+        if component is None:
+            return None
+        return fan_is_on(component)
 
     @property
     def percentage(self) -> int | None:
-        gear = _gear_from_dev(self._dev())
-        if gear == 0:
+        levels = self._levels()
+        if not levels:
+            return None
+        _device, component = self._pair()
+        if component is None:
+            return None
+        raw = _as_int(component.state.get("speed_level"))
+        if raw is None or raw <= 0:
             return 0
-        return ordered_list_item_to_percentage(_ORDERED_GEARS, gear)
-
-    async def async_set_percentage(self, percentage: int) -> None:
-        if percentage <= 0:
-            gear = 0
-        else:
-            gear = int(percentage_to_ordered_list_item(_ORDERED_GEARS, percentage))
-        await self._api.async_command(
-            {"mac": self._mac, "op": "fan_set", "gear": gear}
-        )
-        await self.coordinator.async_request_refresh()
+        return speed_to_percentage(raw, levels)
 
     async def async_turn_on(
         self,
@@ -115,14 +85,32 @@ class LanbonFan(CoordinatorEntity[LanbonCoordinator], FanEntity):
         preset_mode: str | None = None,
         **kwargs: Any,
     ) -> None:
-        if percentage is not None:
-            await self.async_set_percentage(percentage)
+        del preset_mode, kwargs
+        if percentage is None:
+            await self._send("set_on", {"on": True})
             return
-        await self._api.async_command({"mac": self._mac, "op": "fan_set", "on": True})
-        await self.coordinator.async_request_refresh()
+        await self.async_set_percentage(percentage)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        await self._api.async_command(
-            {"mac": self._mac, "op": "fan_set", "on": False, "gear": 0}
+        del kwargs
+        await self._send("set_on", {"on": False})
+
+    async def async_set_percentage(self, percentage: int) -> None:
+        parsed = _as_int(percentage)
+        if parsed is None:
+            raise HomeAssistantError("percentage must be an integer")
+        if parsed <= 0:
+            await self._send("set_on", {"on": False})
+            return
+        levels = self._levels()
+        if not levels:
+            raise HomeAssistantError("speed_level is not declared")
+        level = percentage_to_speed(parsed, levels)
+        if level not in levels:
+            raise HomeAssistantError("speed_level out of range")
+        await self._send("set_speed_level", {"speed_level": level})
+
+    async def _send(self, command: str, params: dict) -> None:
+        await async_send_loip(
+            self.coordinator, self._device_id, self._component_id, command, params
         )
-        await self.coordinator.async_request_refresh()

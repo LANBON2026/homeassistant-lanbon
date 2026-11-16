@@ -1,254 +1,175 @@
-"""LANBON API client + DataUpdateCoordinator."""
+"""Coordinator: aiolanbon only. Poll revision/ETag; apply WS events in memory."""
+
 from __future__ import annotations
 
 import asyncio
-import json
+from dataclasses import replace
+from datetime import timedelta
 import logging
-from typing import Any
 
-import aiohttp
+from aiolanbon import (
+    LanbonAuthError,
+    LanbonClient,
+    LanbonConnectionError,
+    LanbonError,
+    LanbonEventsUnsupportedError,
+    LanbonTimeoutError,
+    SnapshotRefresh,
+)
+from aiolanbon.models import DeviceSnapshot, Event, GatewayInfo
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import (
-    CONF_WS_DISABLED,
-    DEFAULT_PORT,
-    DOMAIN,
-    WS_UNSUPPORTED_FAIL_THRESHOLD,
-    product_is_http_only,
-)
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+_POLL = timedelta(seconds=15)
 
 
-def _is_ws_unsupported_error(err: BaseException) -> bool:
-    """True when the panel rejects WebSocket (not merely offline/unreachable)."""
-    if isinstance(err, aiohttp.ClientResponseError):
-        # L8 httpd: Upgrade → 400; missing URI → 404
-        if err.status in (400, 403, 404, 405, 501):
-            return True
-    msg = str(err).lower()
-    needles = (
-        "upgrade",
-        "websocket",
-        "ws protocol",
-        "400",
-        "404",
-        "not supported",
-        "invalid status",
-        "handshake",
+def _patch_state_changed(snap: DeviceSnapshot, event: Event) -> DeviceSnapshot | None:
+    if event.type != "state_changed" or not event.revision:
+        return None
+    if not event.device_id or not event.component_id or not event.state:
+        return None
+    device = snap.device(event.device_id)
+    if device is None:
+        return None
+    component = device.component(event.component_id)
+    if component is None:
+        return None
+    new_comp = replace(component, state=dict(event.state))
+    new_comps = tuple(
+        new_comp if item.id == component.id else item for item in device.components
     )
-    return any(n in msg for n in needles)
+    new_dev = replace(device, components=new_comps)
+    new_devs = tuple(new_dev if item.id == device.id else item for item in snap.devices)
+    return replace(snap, devices=new_devs, revision=str(event.revision))
 
 
-class LanbonApi:
+def _patch_availability(snap: DeviceSnapshot, event: Event) -> DeviceSnapshot | None:
+    if event.type != "availability_changed" or not event.revision:
+        return None
+    if not event.device_id or event.online is None:
+        return None
+    device = snap.device(event.device_id)
+    if device is None:
+        return None
+    new_dev = replace(device, online=bool(event.online))
+    new_devs = tuple(new_dev if item.id == device.id else item for item in snap.devices)
+    return replace(snap, devices=new_devs, revision=str(event.revision))
+
+
+class LanbonCoordinator(DataUpdateCoordinator[DeviceSnapshot]):
     def __init__(
-        self,
-        hass: HomeAssistant,
-        host: str,
-        port: int,
-        token: str,
-        entry: ConfigEntry | None = None,
+        self, hass: HomeAssistant, config_entry: ConfigEntry, client: LanbonClient
     ) -> None:
-        self.hass = hass
-        self.host = host
-        self.port = port or DEFAULT_PORT
-        self.token = token
-        self._entry = entry
-        self._session = async_get_clientsession(hass)
-        self._ws_task: asyncio.Task | None = None
-        self._listeners: list = []
-        self._ws_fail_count = 0
-        self._ws_disabled = False
-        if entry is not None:
-            self._ws_disabled = bool(
-                entry.options.get(CONF_WS_DISABLED)
-                or entry.data.get(CONF_WS_DISABLED)
-            )
-
-    @property
-    def base(self) -> str:
-        return f"http://{self.host}:{self.port}"
-
-    @property
-    def ws_disabled(self) -> bool:
-        return self._ws_disabled
-
-    def _headers(self) -> dict[str, str]:
-        return {"Authorization": f"Bearer {self.token}"}
-
-    async def async_get_info(self) -> dict[str, Any]:
-        async with self._session.get(
-            f"{self.base}/api/v1/info", headers=self._headers(), timeout=8
-        ) as resp:
-            if resp.status == 401:
-                raise PermissionError("invalid token")
-            resp.raise_for_status()
-            return await resp.json(content_type=None)
-
-    async def async_get_devices(self) -> dict[str, Any]:
-        async with self._session.get(
-            f"{self.base}/api/v1/devices", headers=self._headers(), timeout=8
-        ) as resp:
-            if resp.status == 401:
-                raise PermissionError("invalid token")
-            resp.raise_for_status()
-            return await resp.json(content_type=None)
-
-    async def async_command(self, payload: dict[str, Any]) -> dict[str, Any]:
-        async with self._session.post(
-            f"{self.base}/api/v1/command",
-            headers={**self._headers(), "Content-Type": "application/json"},
-            data=json.dumps(payload),
-            timeout=8,
-        ) as resp:
-            if resp.status == 401:
-                raise PermissionError("invalid token")
-            resp.raise_for_status()
-            return await resp.json(content_type=None)
-
-    def add_listener(self, cb) -> None:
-        self._listeners.append(cb)
-
-    def should_skip_ws_from_snapshot(self, data: dict[str, Any] | None) -> bool:
-        """HTTP-only product (e.g. L8) or explicit ws=false in payload."""
-        if not isinstance(data, dict):
-            return False
-        host = data.get("host") if isinstance(data.get("host"), dict) else {}
-        product = data.get("product") or host.get("product")
-        if product is None:
-            # some firmwares put product on the host row inside devices[]
-            for dev in data.get("devices") or []:
-                if isinstance(dev, dict) and dev.get("is_host"):
-                    product = dev.get("product")
-                    host = dev
-                    break
-        if product_is_http_only(product):
-            return True
-        if host.get("ws") is False or host.get("websocket") is False:
-            return True
-        return False
-
-    def _persist_ws_disabled(self) -> None:
-        """Remember HTTP-poll-only so reload does not hammer Upgrade again."""
-        self._ws_disabled = True
-        entry = self._entry
-        if entry is None:
-            return
-        if entry.options.get(CONF_WS_DISABLED):
-            return
-        self.hass.config_entries.async_update_entry(
-            entry,
-            options={**entry.options, CONF_WS_DISABLED: True},
-        )
-
-    async def async_disable_ws(self, reason: str) -> None:
-        """Stop WS loop permanently for this config entry (HTTP poll remains)."""
-        if self._ws_disabled:
-            return
-        _LOGGER.warning(
-            "LANBON WebSocket disabled (%s); using HTTP poll only for %s:%s",
-            reason,
-            self.host,
-            self.port,
-        )
-        self._persist_ws_disabled()
-        await self.async_stop_ws()
-
-    async def async_start_ws(self, on_message) -> None:
-        self.add_listener(on_message)
-        if self._ws_disabled:
-            _LOGGER.info(
-                "LANBON WS already disabled for %s:%s (HTTP poll only)",
-                self.host,
-                self.port,
-            )
-            return
-        if self._ws_task and not self._ws_task.done():
-            return
-        self._ws_task = self.hass.async_create_task(self._ws_loop())
-
-    async def async_stop_ws(self) -> None:
-        if self._ws_task:
-            self._ws_task.cancel()
-            try:
-                await self._ws_task
-            except asyncio.CancelledError:
-                pass
-            self._ws_task = None
-
-    async def _ws_loop(self) -> None:
-        url = f"ws://{self.host}:{self.port}/api/v1/ws?token={self.token}"
-        while not self._ws_disabled:
-            try:
-                async with self._session.ws_connect(url, heartbeat=30) as ws:
-                    self._ws_fail_count = 0
-                    _LOGGER.debug("LANBON WS connected %s:%s", self.host, self.port)
-                    async for msg in ws:
-                        if self._ws_disabled:
-                            return
-                        if msg.type == aiohttp.WSMsgType.TEXT:
-                            try:
-                                data = json.loads(msg.data)
-                            except json.JSONDecodeError:
-                                continue
-                            for cb in list(self._listeners):
-                                cb(data)
-                        elif msg.type in (
-                            aiohttp.WSMsgType.CLOSED,
-                            aiohttp.WSMsgType.ERROR,
-                        ):
-                            break
-            except asyncio.CancelledError:
-                raise
-            except Exception as err:  # noqa: BLE001
-                if _is_ws_unsupported_error(err):
-                    self._ws_fail_count += 1
-                    _LOGGER.warning(
-                        "LANBON WS unsupported (%s/%s) on %s:%s: %s",
-                        self._ws_fail_count,
-                        WS_UNSUPPORTED_FAIL_THRESHOLD,
-                        self.host,
-                        self.port,
-                        err,
-                    )
-                    if self._ws_fail_count >= WS_UNSUPPORTED_FAIL_THRESHOLD:
-                        await self.async_disable_ws("handshake rejected by panel")
-                        return
-                else:
-                    # Transient offline / network — keep retrying (L10 must not lock out).
-                    self._ws_fail_count = 0
-                    _LOGGER.warning("LANBON WS error: %s", err)
-            await asyncio.sleep(5)
-
-
-class LanbonCoordinator(DataUpdateCoordinator[dict[str, Any]]):
-    def __init__(self, hass: HomeAssistant, api: LanbonApi) -> None:
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=config_entry,
             name=DOMAIN,
-            update_interval=None,  # push via WS; poll as fallback below
+            update_interval=_POLL,
         )
-        self.api = api
-        from datetime import timedelta
+        self.client = client
+        self.info: GatewayInfo | None = None
+        self._etag: str | None = None
+        self._events_task: asyncio.Task | None = None
+        self._use_ws = False
+        self._refresh_dirty = False
+        self._refresh_task: asyncio.Task | None = None
 
-        self.update_interval = timedelta(seconds=30)
+    async def _async_setup(self) -> None:
+        self.info = await self.client.get_info()
+        self._use_ws = bool(self.info.events_websocket)
 
-    async def _async_update_data(self) -> dict[str, Any]:
+    async def _async_update_data(self) -> DeviceSnapshot:
         try:
-            return await self.api.async_get_devices()
-        except PermissionError as err:
-            raise UpdateFailed(str(err)) from err
-        except Exception as err:  # noqa: BLE001
-            raise UpdateFailed(str(err)) from err
+            if self.info is None:
+                await self._async_setup()
+            snap = await self.client.get_devices(if_none_match=self._etag)
+            if snap is None:
+                if self.data is None:
+                    raise UpdateFailed("empty snapshot")
+                return self.data
+            self._etag = snap.revision
+            return snap
+        except LanbonAuthError as err:
+            raise ConfigEntryAuthFailed("unauthorized") from err
+        except (LanbonConnectionError, LanbonTimeoutError, LanbonError) as err:
+            raise UpdateFailed(type(err).__name__) from err
 
-    def handle_ws(self, data: dict[str, Any]) -> None:
-        if not isinstance(data, dict):
-            return
-        if data.get("type") == "state" or "devices" in data:
-            # Ensure coordinator update runs on HA event loop
-            self.hass.loop.call_soon_threadsafe(self.async_set_updated_data, data)
+    async def async_config_entry_first_refresh(self) -> None:
+        await super().async_config_entry_first_refresh()
+        if self._use_ws:
+            self._events_task = self.config_entry.async_create_background_task(
+                self.hass, self._events_loop(), name="lanbon-loip-events"
+            )
+
+    def _request_snapshot(self) -> None:
+        """Clear ETag and GET /devices. Coalesce overlapping SnapshotRefresh."""
+        self._etag = None
+        self._refresh_dirty = True
+        if self._refresh_task is None or self._refresh_task.done():
+            self._refresh_task = asyncio.get_running_loop().create_task(
+                self._drain_snapshot_refresh()
+            )
+
+    async def _drain_snapshot_refresh(self) -> None:
+        try:
+            while self._refresh_dirty:
+                self._refresh_dirty = False
+                await self.async_request_refresh()
+        finally:
+            self._refresh_task = None
+
+    async def _await_snapshot_refresh(self) -> None:
+        task = self._refresh_task
+        if task is not None:
+            await task
+
+    def _apply_event(self, event: Event) -> bool:
+        """Patch coordinator data from a WS event. False → caller must GET /devices."""
+        if self.data is None:
+            return False
+        if event.type == "state_changed":
+            patched = _patch_state_changed(self.data, event)
+        elif event.type == "availability_changed":
+            patched = _patch_availability(self.data, event)
+        elif event.type in {"button_pressed", "scene_activated", "command_result"}:
+            return True
+        else:
+            return False
+        if patched is None:
+            return False
+        self._etag = patched.revision
+        self.async_set_updated_data(patched)
+        return True
+
+    async def _events_loop(self) -> None:
+        try:
+            async for item in self.client.listen():
+                if isinstance(item, SnapshotRefresh):
+                    self._request_snapshot()
+                    continue
+                if self._apply_event(item):
+                    continue
+                self._request_snapshot()
+        except LanbonEventsUnsupportedError:
+            _LOGGER.debug("events websocket unsupported; polling /devices")
+            self._use_ws = False
+        except LanbonAuthError:
+            raise
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            _LOGGER.debug("events loop ended; stay on polling")
+            self._use_ws = False
+        finally:
+            await self._await_snapshot_refresh()
+
+    def async_on_unload(self) -> None:
+        if self._events_task and not self._events_task.done():
+            self._events_task.cancel()

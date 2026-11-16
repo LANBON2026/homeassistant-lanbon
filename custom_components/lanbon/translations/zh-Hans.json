@@ -2,59 +2,39 @@
   "config": {
     "step": {
       "user": {
-        "title": "LANBON 主机",
-        "description": "填写 Mesh 根节点面板的 IP 与 Bearer Token（串口日志或 mDNS TXT）。",
+        "title": "LANBON",
+        "description": "填写网关 IP，以及设备在「开放集成」开启后屏幕上显示的 Bearer Token。Token 不在 mDNS 中。",
         "data": {
           "host": "主机",
           "port": "端口",
           "token": "Token"
-        },
-        "data_description": {
-          "host": "Mesh 根节点面板的局域网 IP。",
-          "port": "本地 API 端口（默认 8765）。",
-          "token": "设备日志中 token= 后面的 32 位十六进制字符串。"
         }
       },
       "discovery_confirm": {
         "title": "发现 {name}",
-        "description": "添加 {name}（{host}）？",
+        "description": "添加 {name}（{host}）。请从设备屏幕粘贴 Token。",
         "data": {
           "token": "Token"
-        },
-        "data_description": {
-          "token": "若 mDNS 已广播会自动填入；否则从设备日志粘贴。"
+        }
+      },
+      "reauth_confirm": {
+        "title": "重新认证 {name}",
+        "description": "Token 已被拒绝。请输入设备当前 Token。",
+        "data": {
+          "token": "Token"
         }
       }
     },
     "error": {
-      "cannot_connect": "无法连接 LANBON 主机",
+      "cannot_connect": "无法连接设备。请在面板打开「开放集成」后重试。",
       "invalid_auth": "Token 无效",
-      "not_root": "设备不是 Mesh 根节点 — 仅根节点提供本地 API",
+      "api_disabled": "设备「开放集成」已关闭",
       "unknown": "未知错误"
     },
     "abort": {
-      "already_configured": "该主机已配置"
-    }
-  },
-  "entity": {
-    "cover": {
-      "curtain": {
-        "state": {
-          "opening": "正在开启",
-          "closing": "正在关闭",
-          "stopped": "停止"
-        }
-      }
-    },
-    "fan": {
-      "fan": {
-        "name": "风扇"
-      }
-    },
-    "switch": {
-      "fan_light": {
-        "name": "灯"
-      }
+      "already_configured": "该网关已配置",
+      "reauth_successful": "重新认证成功",
+      "wrong_device": "Token 不属于此网关"
     }
   }
 }

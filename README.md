@@ -1,72 +1,31 @@
-# LANBON Home Assistant Integration
+# LANBON Home Assistant (HACS)
 
-Local integration for **LANBON Mesh root** panels (HTTP + WebSocket, no cloud required for control).
-
-| | |
-|---|---|
-| Domain | `lanbon` |
-| Version | **0.2.2** |
-| Discovery | mDNS `_lanbon._tcp` |
-| API port | **8765** |
-| IoT class | `local_push` |
-| Min HA | **2026.3.0** (required for integration `brand/` icons) |
+Local control for LANBON Mesh root panels over the LOIP HTTP/WebSocket API.
 
 ## Install
 
-### A. Manual (fastest)
+1. HACS → Integrations → Custom repositories
+2. URL: https://github.com/LANBON2026/homeassistant-lanbon
+3. Category: Integration
+4. Download **LANBON** → Restart Home Assistant → Add Integration
 
-1. Copy `custom_components/lanbon` → `/config/custom_components/lanbon`
-2. Restart Home Assistant
-3. **Settings → Devices & services → Add Integration → LANBON**
-4. Enter host IP, port `8765`, and Bearer token
+## Requirements
 
-Token appears in firmware log:
+- Home Assistant 2026.3.0+
+- PyPI dependency: iolanbon==0.2.0 (installed automatically from manifest.json)
+- Panel firmware that exposes the LOIP local API (port 8765 by default)
 
-```text
-W (...) haLocal: HA local API up (mesh root). token=xxxxxxxx
-```
+## Platforms (0.3.0)
 
-### B. HACS
+- switch
+- light
+- fan
 
-1. HACS → Integrations → ⋮ → Custom repositories  
-2. URL = `https://github.com/LANBON2026/homeassistant-lanbon`  
-3. Category = **Integration**  
-4. Download **LANBON**, restart HA  
-5. Add Integration / accept discovery
+## Legacy
 
-## Prerequisites
+Release **v0.2.12** is the last pre-LOIP HACS package (built-in HTTP/WS client, no iolanbon). Keep using that tag if your panels are still on the older local API.
 
-- Panel is **Mesh root** (level 1) — only root runs the local API / mDNS
-- HA and panel on the same LAN (Docker/WSL2 often break mDNS → use manual IP)
-- Firmware with HA local API (`HA_LOCAL_PROTO_VER = 1`)
+## Links
 
-## Verify before HA
-
-```bash
-curl -H "Authorization: Bearer YOUR_TOKEN" http://DEVICE_IP:8765/api/v1/info
-curl -H "Authorization: Bearer YOUR_TOKEN" http://DEVICE_IP:8765/api/v1/devices
-```
-
-## Features
-
-- Host + Mesh children as devices (`via_device` for children)
-- Platforms: **switch**, **light**, **cover**
-- State push over WebSocket; HTTP poll every 30s as fallback
-- Channel rename: service `lanbon.set_channel_name` or rename entity in HA UI
-
-## Docs
-
-- [Local API contract (frozen)](docs/API.md) — **do not break without bumping `proto`**
-- [Changelog](CHANGELOG.md)
-- [Bronze checklist (path to Core)](BRONZE_CHECKLIST.md)
-
-## Roadmap to official Core
-
-1. Stabilize on HACS (this package)
-2. Keep `docs/API.md` as the public contract
-3. Fill [BRONZE_CHECKLIST.md](BRONZE_CHECKLIST.md)
-4. Open PR against `home-assistant/core` + brands + docs
-
-## License
-
-Same as product / company policy. Replace with SPDX when publishing a public repo.
+- Releases: https://github.com/LANBON2026/homeassistant-lanbon/releases
+- Client library: https://github.com/LANBON2026/aiolanbon

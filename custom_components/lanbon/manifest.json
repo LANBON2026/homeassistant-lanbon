@@ -4,10 +4,12 @@
   "codeowners": ["@LANBON2026"],
   "config_flow": true,
   "documentation": "https://github.com/LANBON2026/homeassistant-lanbon#readme",
-  "issue_tracker": "https://github.com/LANBON2026/homeassistant-lanbon/issues",
-  "iot_class": "local_push",
+  "iot_class": "local_polling",
   "integration_type": "hub",
-  "version": "0.2.12",
-  "requirements": [],
+  "loggers": ["aiolanbon"],
+  "requirements": [
+    "aiolanbon==0.2.0"
+  ],
+  "version": "0.3.0",
   "zeroconf": ["_lanbon._tcp.local."]
 }
