@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.scene import SceneEntity
+from homeassistant.components.scene import Scene
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -31,7 +31,7 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class LanbonScene(LanbonEntity, SceneEntity):
+class LanbonScene(LanbonEntity, Scene):
     async def async_activate(self, **kwargs: Any) -> None:
         await async_send_loip(
             self.coordinator,

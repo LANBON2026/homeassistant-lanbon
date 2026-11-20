@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.4 - 2026-11-20
+
+### Fixed
+- Fix scene platform import for HA 2026.x: SceneEntity was replaced by Scene in homeassistant.components.scene. The failed import crashed the whole LANBON config entry setup, which also blocked switch/light/fan.
+
 ## 0.3.3 - 2026-11-20
 
 ### Added
