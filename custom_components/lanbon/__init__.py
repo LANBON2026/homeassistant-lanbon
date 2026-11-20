@@ -17,7 +17,13 @@ from .coordinator import LanbonCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.SWITCH, Platform.LIGHT, Platform.FAN]
+PLATFORMS = [
+    Platform.SWITCH,
+    Platform.LIGHT,
+    Platform.FAN,
+    Platform.COVER,
+    Platform.SCENE,
+]
 
 
 @dataclass

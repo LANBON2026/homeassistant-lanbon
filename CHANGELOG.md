@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.3 - 2026-11-20
+
+### Added
+- New LOIP platforms: **cover** and **scene**.
+- `cover` supports open/close/stop (+ set_position when the gateway declares `position`; L10 2749 reports motion only).
+- `scene` maps L8 scene switches (`scene:1/2/3`, `1G2S`, `2G1S`) to HA scene activation via `set_on`.
+- Entity mapping helpers `is_cover_component`, `is_scene_component`, `iter_cover_components`, `iter_scene_components`, `cover_position_range`.
+
+### Changed
+- `PLATFORMS` extended from `[switch, light, fan]` to `[switch, light, fan, cover, scene]`.
+
 ## 0.3.2 - 2026-11-16
 
 ### Fixed

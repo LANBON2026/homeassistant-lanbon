@@ -55,6 +55,36 @@ def is_fan_component(component: Component) -> bool:
     return component.type == "fan" and "set_on" in component.commands
 
 
+def is_cover_component(component: Component) -> bool:
+    """True when LOIP declares type=cover and can open/close/stop."""
+    return component.type == "cover" and any(
+        cmd in component.commands for cmd in ("open", "close", "stop")
+    )
+
+
+def is_scene_component(component: Component) -> bool:
+    """True when LOIP declares type=scene and can be activated via set_on."""
+    return component.type == "scene" and "set_on" in component.commands
+
+
+def cover_position_range(component: Component | None) -> tuple[int, int] | None:
+    """Declared position min/max, or None when the cover cannot report position."""
+    if component is None:
+        return None
+    if "position" not in component.features:
+        return None
+    if "set_position" not in component.commands:
+        return None
+    raw = component.constraints.get("position")
+    if not isinstance(raw, dict):
+        return None
+    lo = _as_int(raw.get("min", 0))
+    hi = _as_int(raw.get("max", 100))
+    if lo is None or hi is None or hi < lo:
+        return None
+    return lo, hi
+
+
 def brightness_levels(component: Component | None) -> list[int] | None:
     """Declared non-zero brightness steps, or None when brightness is absent."""
     if component is None:
@@ -162,3 +192,11 @@ def iter_light_components(snapshot: DeviceSnapshot | None) -> list[tuple[Device,
 
 def iter_fan_components(snapshot: DeviceSnapshot | None) -> list[tuple[Device, Component]]:
     return _iter_components(snapshot, is_fan_component)
+
+
+def iter_cover_components(snapshot: DeviceSnapshot | None) -> list[tuple[Device, Component]]:
+    return _iter_components(snapshot, is_cover_component)
+
+
+def iter_scene_components(snapshot: DeviceSnapshot | None) -> list[tuple[Device, Component]]:
+    return _iter_components(snapshot, is_scene_component)

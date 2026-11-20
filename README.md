@@ -15,11 +15,13 @@ Local control for LANBON Mesh root panels over the LOIP HTTP/WebSocket API.
 - PyPI dependency: iolanbon==0.2.0 (installed automatically from manifest.json)
 - Panel firmware that exposes the LOIP local API (port 8765 by default)
 
-## Platforms (0.3.2)
+## Platforms (0.3.3)
 
 - switch
 - light
 - fan
+- cover
+- scene
 
 ## Brand
 
