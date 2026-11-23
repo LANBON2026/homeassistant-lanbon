@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.5 - 2026-11-23
+
+### Fixed
+- Device registry name/model now come from each LOIP `/devices` row, not gateway `/info` alone. Mesh children (e.g. L8-3G) no longer appear as the host model (e.g. L8-SCENE).
+- Existing entries without a user rename are corrected on the next snapshot sync; child devices set `via_device` to the gateway.
+
 ## 0.3.4 - 2026-11-20
 
 ### Fixed
